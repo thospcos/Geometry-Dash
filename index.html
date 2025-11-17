@@ -42,7 +42,7 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
 const GRAVITY = 0.7;
-const JUMP = -12;
+const JUMP = -15; // slightly higher jump
 let speed = 4;
 let distance = 0;
 let gameOver = false;
@@ -61,13 +61,22 @@ let obstacles = [];
 function spawnObstacle() {
   const spikeHeight = 40;
   const spikeWidth = 40;
-  const gap = Math.random() * 200 + 100;
-  obstacles.push({
-    x: canvas.width + gap,
-    y: canvas.height - spikeHeight,
-    width: spikeWidth,
-    height: spikeHeight
-  });
+
+  // Decide number of spikes: 1, 2, or 3
+  const rand = Math.random();
+  let spikes = 1;
+  if (rand < 0.3) spikes = 3;
+  else if (rand < 0.6) spikes = 2;
+
+  for (let i = 0; i < spikes; i++) {
+    const gap = Math.random() * 50 + 50; // random spacing for multi spikes
+    obstacles.push({
+      x: canvas.width + i * (spikeWidth + gap),
+      y: canvas.height - spikeHeight,
+      width: spikeWidth,
+      height: spikeHeight
+    });
+  }
 }
 
 // Controls
@@ -79,7 +88,6 @@ document.addEventListener('keydown', (e) => {
 
 // Collision detection
 function checkCollision(rect, tri) {
-  // Approximate collision with bounding box
   const triBox = {x: tri.x, y: tri.y, width: tri.width, height: tri.height};
   return rect.x < triBox.x + triBox.width &&
          rect.x + rect.size > triBox.x &&
