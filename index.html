@@ -87,25 +87,18 @@ function resetGame(startNewLevel = false) {
     levelStartTime = Date.now();
 }
 
+function // ONLY SPIKES — NO OBSTACLES
 function spawnObstacle() {
-    if (Math.random() < 0.6) return;
+    const minDist = 80;  // ~1 meter
+    const maxDist = 640; // ~8 meters
 
-    const isTall = Math.random() < 0.3;
-    const w = 200 + Math.random() * 200;
-    const h = isTall ? 120 : 60;
-    const x = canvas.width + 150;
-    const y = 260 - h;
-    obstacles.push({ x, y, w, h });
+    const x = canvas.width + minDist + Math.random() * (maxDist - minDist);
+    const size = 25;
+    const y = 260 - size;
 
-    if (Math.random() < 0.4) {
-        spikes.push({ x: x + w/2 - 12, y: y - 25, size: 25 });
-    }
-
-    if (Math.random() < 0.3) {
-        spikes.push({ x: x + Math.random()*w, y: 260 - 20, size: 25 });
-    }
+    spikes.push({ x, y, size });
 }
-setInterval(spawnObstacle, 1200);
+setInterval(spawnObstacle, 600);(spawnObstacle, 1200);
 
 window.addEventListener("keydown", e => { if (e.code === "Space") jumpHeld = true; });
 window.addEventListener("keyup", e => { if (e.code === "Space") jumpHeld = false; });
@@ -130,7 +123,7 @@ function update() {
         player.grounded = true;
     }
 
-    player.rotation += spinSpeed;
+    if (!player.grounded) player.rotation += spinSpeed;
 
     for (let ob of obstacles) {
         ob.x -= speed;
