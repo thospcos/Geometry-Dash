@@ -5,55 +5,64 @@
 <title>algebra dash (thosphere's geometry dash remake)</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
+  html, body {
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
     background: #222;
-    overflow: hidden;
     font-family: sans-serif;
     color: #fff;
+    overflow: hidden;
+  }
+  #gameContainer {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
   canvas {
-    display: block;
     background: #111;
-    margin: 0 auto;
+    display: block;
   }
   #progressContainer {
-    position: absolute;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
+    margin-top: 10px;
     width: 70%;
-    height: 12px;
+    height: 5px;
     background: #555;
-    border-radius: 6px;
+    border-radius: 3px;
     overflow: hidden;
   }
   #progressBar {
     height: 100%;
     width: 0;
     background: #0f0;
+    transition: width 0.3s linear;
   }
   #restartBtn {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    padding: 16px 32px;
-    font-size: 20px;
+    padding: 12px 24px;
+    font-size: 18px;
     background: #0f0;
     color: #111;
     border: none;
-    border-radius: 8px;
+    border-radius: 6px;
     cursor: pointer;
     display: none;
   }
 </style>
 </head>
 <body>
-<canvas id="gameCanvas" width="800" height="400"></canvas>
-<div id="progressContainer">
-  <div id="progressBar"></div>
+<div id="gameContainer">
+  <canvas id="gameCanvas" width="800" height="400"></canvas>
+  <div id="progressContainer">
+    <div id="progressBar"></div>
+  </div>
+  <button id="restartBtn">Restart</button>
 </div>
-<button id="restartBtn">Restart</button>
 
 <script>
 const canvas = document.getElementById('gameCanvas');
@@ -79,14 +88,9 @@ let lastObstacleX = 0;
 function spawnObstacle() {
   const spikeHeight = 40;
   const spikeWidth = 40;
-  let gap = Math.random() * 200 + 300;
-  const x = Math.max(canvas.width + gap, lastObstacleX + 300);
-  obstacles.push({
-    x: x,
-    y: canvas.height - spikeHeight,
-    width: spikeWidth,
-    height: spikeHeight
-  });
+  let gap = Math.random() * 200 + 200;
+  const x = Math.max(canvas.width + gap, lastObstacleX + 200);
+  obstacles.push({ x: x, y: canvas.height - spikeHeight, width: spikeWidth, height: spikeHeight });
   lastObstacleX = x;
 }
 
@@ -161,22 +165,18 @@ function update() {
     obstacles[i].x -= speed;
     drawTriangle(obstacles[i]);
 
-    if (checkCollision(player, obstacles[i])) {
-      endGame();
-    }
+    if (checkCollision(player, obstacles[i])) endGame();
 
-    if (obstacles[i].x + obstacles[i].width < 0) {
-      obstacles.splice(i,1);
-    }
+    if (obstacles[i].x + obstacles[i].width < 0) obstacles.splice(i,1);
   }
 
-  if (obstacles.length === 0 || canvas.width - obstacles[obstacles.length-1].x > 300) {
+  if (obstacles.length === 0 || canvas.width - obstacles[obstacles.length-1].x > 200) {
     if (Math.random() < 0.02) spawnObstacle();
   }
 
   distance += speed;
-  const progress = Math.min(distance / 2000, 1);
-  document.getElementById('progressBar').style.width = (progress * 100) + '%';
+  const slowProgress = Math.min(distance / 10000, 1);
+  document.getElementById('progressBar').style.width = (slowProgress * 100) + '%';
 
   requestAnimationFrame(update);
 }
