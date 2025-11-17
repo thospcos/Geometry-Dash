@@ -1,206 +1,233 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Geometry Dash HTML</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Geometry Dash — Mini HTML</title>
   <style>
-    body {
-      margin: 0;
-      background: #0e0e0e;
-      overflow: hidden;
-      font-family: Arial, sans-serif;
-    }
-    canvas {
-      display: block;
-      background: #1a1a1a;
-      margin: 0 auto;
-    }
-    #restartBtn {
-      position: absolute;
-      top: 20px;
-      left: 20px;
-      padding: 10px 20px;
-      background: #ffffff15;
-      border: 1px solid #ffffff33;
-      color: white;
-      font-size: 16px;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-    #restartBtn:hover {
-      background: #ffffff22;
-    }
+    :root{--bg:#07101a;--panel:#0b1220;--accent:#14b8a6;--danger:#ef4444}
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:linear-gradient(180deg,#071126,#041021);color:#e6eef6}
+    .center-wrap{height:100%;display:flex;align-items:center;justify-content:center}
+    .stage{position:relative;width:940px;max-width:96vw}
+    canvas{display:block;width:100%;height:420px;border-radius:8px;background:linear-gradient(180deg,#081725,#042033);}
+    .hud{position:absolute;left:0;right:0;top:8px;display:flex;align-items:center;justify-content:center;pointer-events:none}
+    .progress-bar{width:60%;max-width:620px;height:8px;background:rgba(255,255,255,0.06);border-radius:6px;overflow:hidden}
+    .progress-inner{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),#60f3d8)}
+    .progress-text{position:absolute;top:8px;left:calc(50% + 320px);transform:translateX(-50%);font-size:13px;color:rgba(255,255,255,0.85)}
+    .center-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+    .restart-btn{pointer-events:auto;padding:12px 20px;border-radius:8px;background:#ffffff11;border:1px solid rgba(255,255,255,0.08);color:#fff;font-weight:700;cursor:pointer}
+    .restart-btn:hover{background:#ffffff18}
+    .score{position:absolute;left:12px;top:12px;font-size:14px;color:#cfeee6}
+    .best{position:absolute;left:12px;top:34px;font-size:12px;color:#94a3b8}
   </style>
 </head>
 <body>
-
-
-<canvas id="game" width="900" height="400"></canvas>
+  <div class="center-wrap">
+    <div class="stage">
+      <div class="hud">
+        <div class="progress-bar"><div id="progInner" class="progress-inner"></div></div>
+        <div id="progText" class="progress-text">0%</div>
+      </div>
+      <div class="score" id="score">Score: 0</div>
+      <div class="best" id="best">Best: 0</div>
+      <canvas id="game" width="900" height="420"></canvas>
+      <div class="center-overlay" id="overlay"></div>
+    </div>
+  </div>
 
 <script>
-// =============================
-// BASIC VARIABLE SETUP
-// =============================
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-const restartBtn = null;
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const overlay = document.getElementById('overlay');
+  const progInner = document.getElementById('progInner');
+  const progText = document.getElementById('progText');
+  const scoreEl = document.getElementById('score');
+  const bestEl = document.getElementById('best');
 
-let player = {
-  x: 80,
-  y: 300,
-  size: 40,
-  vy: 0,
-  gravity: 0.8,
-  jumpForce: -14,
-  rotating: 0
-};
+  // Logical resolution (we draw using these coordinates)
+  const W = 900, H = 420;
+  canvas.width = W; canvas.height = H;
 
-let groundY = 350;
-let obstacles = [];
-let gameSpeed = 6;
-let gameRunning = true;
-let progress = 0;
-let spaceHeld = false;
+  // Player similar to GD cube
+  const player = {
+    x: 120,
+    y: H - 80 - 40, // ground offset
+    size: 40,
+    vy: 0,
+    gravity: 0.9,
+    jumpForce: -15,
+    grounded: true,
+    rotation: 0,
+    alive: true
+  };
 
-// =============================
-// INPUT HANDLING
-// =============================
-window.addEventListener("keydown", (e) => {
-  if (e.code === "Space") {
-    spaceHeld = true;
-    jump();
+  let groundY = H - 80;
+  let obstacles = [];
+  let gameSpeed = 5.2;     // base speed, increases slowly
+  let speedTimer = 0;
+  let spawnTimer = 0;
+  let spawnInterval = 90; // frames (adaptive)
+  let score = 0;
+  let best = Number(localStorage.getItem('gd_best') || 0);
+  bestEl.textContent = 'Best: ' + best;
+
+  // Progress (like GD: percent through the current 'level chunk')
+  let distance = 0;
+  const chunkLength = 1400; // pixels per chunk
+  let chunkStart = 0;
+
+  // Input
+  let inputHeld = false;
+  function startJump(){ if(!player.alive) return; if(player.grounded){ player.vy = player.jumpForce; player.grounded = false; playBeep(800,0.06);} inputHeld = true; }
+  function endJump(){ inputHeld = false; }
+  window.addEventListener('keydown', e => { if(e.code==='Space'){ e.preventDefault(); startJump(); } });
+  window.addEventListener('keyup', e => { if(e.code==='Space'){ endJump(); } });
+  canvas.addEventListener('mousedown', startJump); window.addEventListener('mouseup', endJump);
+  canvas.addEventListener('touchstart', e => { e.preventDefault(); startJump(); }, {passive:false});
+  canvas.addEventListener('touchend', e => { e.preventDefault(); endJump(); }, {passive:false});
+
+  // audio
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  const actx = AudioCtx ? new AudioCtx() : null;
+  function playBeep(freq=440,dur=0.05){ if(!actx) return; const o=actx.createOscillator(); const g=actx.createGain(); o.type='sawtooth'; o.frequency.value=freq; g.gain.setValueAtTime(0.0001,actx.currentTime); g.gain.linearRampToValueAtTime(0.12, actx.currentTime+0.01); g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime+dur); o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime+dur+0.02); }
+
+  // spawn balanced obstacles procedurally
+  function spawnObstacle() {
+    // choose gap based on speed and last obstacle
+    const last = obstacles.length ? obstacles[obstacles.length-1] : null;
+    // gap: player needs time to react -> base + random - scaled by speed
+    const baseGap = Math.max(180, 300 - gameSpeed*22);
+    const gap = baseGap + Math.random()*160;
+
+    const x = W + gap;
+    // choose spike or block
+    const isSpike = Math.random() < 0.45;
+    if(isSpike){
+      const w = 28; const h = 28 * (0.6 + Math.random()*0.2); // shorter spikes
+      obstacles.push({type:'spike', x, y: groundY - h, w, h});
+    } else {
+      const h = 40 + Math.random()*80; const w = 30 + Math.random()*30;
+      obstacles.push({type:'block', x, y: groundY - h, w, h});
+    }
   }
-});
-window.addEventListener("keyup", (e) => {
-  if (e.code === "Space") spaceHeld = false;
-});
 
+  // initial seeding
+  for(let i=0;i<3;i++) spawnObstacle();
 
-
-// =============================
-// SPAWN PROCEDURAL OBSTACLES
-// =============================
-function spawnObstacle() {
-  let height = 40 + Math.random() * 60;
-  obstacles.push({
-    x: canvas.width + 50,
-    y: groundY - height,
-    w: 30,
-    h: height * 0.5,
-  });
-}
-setInterval(() => {
-  if (gameRunning) spawnObstacle();
-}, 900);
-
-// =============================
-// PLAYER JUMP + PHYSICS
-// =============================
-function jump() {
-  if (player.y >= groundY - player.size - 1) {
-    player.vy = player.jumpForce;
+  function resetGame(){
+    player.y = groundY - player.size; player.vy = 0; player.grounded = true; player.rotation = 0; player.alive = true;
+    obstacles = []; score = 0; distance = 0; chunkStart = 0; gameSpeed = 5.2; speedTimer = 0; spawnTimer = 0; spawnInterval = 90;
+    progInner.style.width = '0%'; progText.textContent = '0%'; scoreEl.textContent = 'Score: 0'; overlay.innerHTML = '';
+    for(let i=0;i<3;i++) spawnObstacle();
+    loop();
   }
-}
 
-// =============================
-// COLLISION DETECTION
-// =============================
-function isColliding(a, b) {
-  return (
-    a.x < b.x + b.w &&
-    a.x + a.size > b.x &&
-    a.y < b.y + b.h &&
-    a.y + a.size > b.y
-  );
-}
+  function showRestart() {
+    overlay.innerHTML = '';
+    const box = document.createElement('div');
+    box.style.pointerEvents = 'auto';
+    box.style.textAlign = 'center';
+    const btn = document.createElement('button');
+    btn.className = 'restart-btn';
+    btn.textContent = 'Restart';
+    btn.onclick = () => { resetGame(); };
+    const label = document.createElement('div');
+    label.style.marginBottom = '12px';
+    label.style.fontSize = '20px';
+    label.style.fontWeight = '700';
+    label.textContent = 'You Died';
+    box.appendChild(label); box.appendChild(btn); overlay.appendChild(box);
+  }
 
-// =============================
-// GAME RESET
-// =============================
-function resetGame() {
-  player.y = groundY - player.size;
-  player.vy = 0;
-  obstacles = [];
-  gameRunning = true;
-}
+  function rectsCollide(a,b){ return a.x < b.x + b.w && a.x + a.size > b.x && a.y < b.y + b.h && a.y + a.size > b.y; }
 
-// =============================
-// MAIN GAME LOOP
-// =============================
-function loop() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // small particle explosion on death
+  const particles = [];
+  function spawnParticles(x,y,color,amt=14){ for(let i=0;i<amt;i++){ particles.push({x,y,vx:(Math.random()-0.5)*6, vy:(Math.random()-1.5)*6, life:30+Math.random()*30, c:color}); } }
 
-  // progress bar
-  ctx.fillStyle = '#00ff99';
-  ctx.fillRect(0, 0, (progress % canvas.width), 4);
-  progress += gameRunning ? 2 : 0;
+  // main loop
+  let raf = null;
+  function update(){
+    if(!player.alive) return;
 
-  if (gameRunning) {
-(0, 0, canvas.width, canvas.height);
+    // speed gradually increases
+    speedTimer += 1/60;
+    if(speedTimer > 2.2){ gameSpeed += 0.02; speedTimer = 0; }
 
-  if (gameRunning) {
-    // Gravity
-    player.vy += player.gravity;
-    player.y += player.vy;
+    // spawn timing
+    spawnTimer++;
+    if(spawnTimer > spawnInterval){ spawnObstacle(); spawnTimer = 0; spawnInterval = 60 + Math.floor(Math.random()*80) - Math.floor(gameSpeed*3); if(spawnInterval < 48) spawnInterval = 48; }
 
-    if (player.y >= groundY - player.size) {
-      player.y = groundY - player.size;
-      player.vy = 0;
+    // physics
+    if(!player.grounded){
+      // allow slightly higher jump when holding (like GD: holding longer reduces gravity)
+      player.vy += player.gravity * (inputHeld ? 0.72 : 1.0);
+      player.y += player.vy;
+      player.rotation += player.vy * 0.04; // rotation based on vertical velocity
+    }
+    if(player.y + player.size >= groundY){ player.y = groundY - player.size; player.vy = 0; player.grounded = true; player.rotation = 0; }
+
+    // move obstacles and check collision
+    for(let i=obstacles.length-1;i>=0;i--){ const ob = obstacles[i]; ob.x -= gameSpeed; if(ob.x + ob.w < -80) { obstacles.splice(i,1); score++; scoreEl.textContent = 'Score: ' + score; if(score>best){ best = score; bestEl.textContent = 'Best: ' + best; localStorage.setItem('gd_best', best);} }
+      // collision check with small spike tolerance (GD allows a little overlap if player above spike top?) we'll keep strict
+      if(rectsCollide(player, {x:ob.x, y:ob.y, w:ob.w, h:ob.h})){
+        // death
+        player.alive = false; spawnParticles(player.x + player.size/2, player.y + player.size/2, '--death');
+        // particles color
+        spawnParticles(player.x + player.size/2, player.y + player.size/2, '#ef4444', 24);
+        showRestart();
+      }
     }
 
-    // Rotate exactly like GD
-    if (player.y < groundY - player.size) player.rotating += 0.2;
-    else player.rotating = 0;
+    // particles update
+    for(let i=particles.length-1;i>=0;i--){ const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.3; p.life--; if(p.life <= 0) particles.splice(i,1); }
 
-    // Move obstacles
-    obstacles.forEach((ob) => {
-      ob.x -= gameSpeed;
+    // distance/progress
+    distance += gameSpeed;
+    const chunkProgress = Math.min(1, (distance - chunkStart) / chunkLength);
+    const percent = Math.floor(chunkProgress*100);
+    progInner.style.width = percent + '%'; progText.textContent = percent + '%';
+    if(chunkProgress >= 1){ // new chunk
+      chunkStart = distance; // start next chunk
+    }
+  }
 
-      if (isColliding({ x: player.x, y: player.y, size: player.size }, ob)) {
-        gameRunning = false;
-        showRestart();
+  function draw(){
+    // background
+    ctx.clearRect(0,0,W,H);
+    const lg = ctx.createLinearGradient(0,0,0,H); lg.addColorStop(0,'#071726'); lg.addColorStop(1,'#031425'); ctx.fillStyle = lg; ctx.fillRect(0,0,W,H);
+
+    // parallax ground
+    ctx.fillStyle = '#051f2b'; ctx.fillRect(0, groundY, W, H-groundY);
+    // ground stripes
+    for(let i=0;i<Math.ceil(W/40);i++){ const off = ((distance*0.5) % 40); ctx.fillStyle='rgba(255,255,255,0.02)'; ctx.fillRect(i*40 - off, groundY+6, 20, 6); }
+
+    // draw obstacles
+    obstacles.forEach(ob => {
+      if(ob.type === 'spike'){
+        ctx.beginPath(); ctx.moveTo(ob.x, ob.y + ob.h); ctx.lineTo(ob.x + ob.w/2, ob.y); ctx.lineTo(ob.x + ob.w, ob.y + ob.h); ctx.closePath(); ctx.fillStyle = '#ef4444'; ctx.fill();
+      } else {
+        roundRect(ob.x, ob.y, ob.w, ob.h, 6); ctx.fillStyle='#2b3a45'; ctx.fill(); ctx.lineWidth=2; ctx.strokeStyle='rgba(255,255,255,0.04)'; ctx.stroke();
       }
     });
 
-    // Remove off-screen obstacles
-    obstacles = obstacles.filter((ob) => ob.x + ob.w > 0);
+    // draw player (rotating cube)
+    ctx.save(); ctx.translate(player.x + player.size/2, player.y + player.size/2); ctx.rotate(player.rotation);
+    roundRect(-player.size/2, -player.size/2, player.size, player.size, 6); ctx.fillStyle='#14b8a6'; ctx.fill(); ctx.restore();
+
+    // draw particles
+    particles.forEach(p => { ctx.globalAlpha = Math.max(0, Math.min(1, p.life/60)); ctx.fillStyle = p.c; ctx.fillRect(p.x, p.y, 3, 3); ctx.globalAlpha = 1; });
   }
 
-  // =============================
-  // DRAW PLAYER WITH ROTATION
-  // =============================
-  ctx.save();
-  ctx.translate(player.x + player.size / 2, player.y + player.size / 2);
-  ctx.rotate(player.rotating);
-  ctx.fillStyle = "cyan";
-  ctx.fillRect(-player.size / 2, -player.size / 2, player.size, player.size);
-  ctx.restore();
+  function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
 
-  // Draw ground
-  ctx.fillStyle = "#444";
-  ctx.fillRect(0, groundY, canvas.width, 4);
+  function loop(){ update(); draw(); if(player.alive) raf = requestAnimationFrame(loop); }
 
-  // Draw obstacles
-  ctx.fillStyle = "#ff4444";
-  obstacles.forEach((ob) => ctx.fillRect(ob.x, ob.y, ob.w, ob.h));
-
-  requestAnimationFrame(loop);
-}
-
-loop();
-function showRestart() {
-  const b = document.createElement('button');
-  b.id = 'restartBtn';
-  b.innerText = 'Restart';
-  b.style.position = 'absolute';
-  b.style.top = '20px';
-  b.style.left = '20px';
-  b.style.padding = '10px 20px';
-  b.onclick = () => location.reload();
-  document.body.appendChild(b);
-}
-
+  // start
+  player.y = groundY - player.size; resetGame();
+})();
 </script>
-
 </body>
 </html>
