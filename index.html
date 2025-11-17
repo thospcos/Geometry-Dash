@@ -42,12 +42,11 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
 const GRAVITY = 0.7;
-const JUMP = -15; // slightly higher jump
-let speed = 4;
+const JUMP = -12;
+let speed = 5.3;
 let distance = 0;
 let gameOver = false;
 
-// Player
 const player = {
   x: 100,
   y: canvas.height - 50,
@@ -56,37 +55,25 @@ const player = {
   rotation: 0
 };
 
-// Obstacles (triangle spikes)
 let obstacles = [];
 function spawnObstacle() {
   const spikeHeight = 40;
   const spikeWidth = 40;
-
-  // Decide number of spikes: 1, 2, or 3
-  const rand = Math.random();
-  let spikes = 1;
-  if (rand < 0.3) spikes = 3;
-  else if (rand < 0.6) spikes = 2;
-
-  for (let i = 0; i < spikes; i++) {
-    const gap = Math.random() * 50 + 50; // random spacing for multi spikes
-    obstacles.push({
-      x: canvas.width + i * (spikeWidth + gap),
-      y: canvas.height - spikeHeight,
-      width: spikeWidth,
-      height: spikeHeight
-    });
-  }
+  const gap = Math.random() * 200 + 100;
+  obstacles.push({
+    x: canvas.width + gap,
+    y: canvas.height - spikeHeight,
+    width: spikeWidth,
+    height: spikeHeight
+  });
 }
 
-// Controls
 document.addEventListener('keydown', (e) => {
   if (e.code === 'Space' && player.y + player.size >= canvas.height) {
     player.dy = JUMP;
   }
 });
 
-// Collision detection
 function checkCollision(rect, tri) {
   const triBox = {x: tri.x, y: tri.y, width: tri.width, height: tri.height};
   return rect.x < triBox.x + triBox.width &&
@@ -95,7 +82,6 @@ function checkCollision(rect, tri) {
          rect.y + rect.size > triBox.y;
 }
 
-// Draw triangle spike
 function drawTriangle(tri) {
   ctx.fillStyle = '#f00';
   ctx.beginPath();
@@ -106,13 +92,11 @@ function drawTriangle(tri) {
   ctx.fill();
 }
 
-// Game loop
 function update() {
   if (gameOver) return;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Update player
   player.dy += GRAVITY;
   player.y += player.dy;
 
@@ -121,8 +105,12 @@ function update() {
     player.dy = 0;
   }
 
-  // Draw spinning player
-  player.rotation += 0.2;
+  if (player.dy !== 0) {
+    player.rotation += 0.2;
+  } else {
+    player.rotation = 0;
+  }
+
   ctx.save();
   ctx.translate(player.x + player.size/2, player.y + player.size/2);
   ctx.rotate(player.rotation);
@@ -130,7 +118,6 @@ function update() {
   ctx.fillRect(-player.size/2, -player.size/2, player.size, player.size);
   ctx.restore();
 
-  // Update obstacles
   for (let i = obstacles.length - 1; i >= 0; i--) {
     obstacles[i].x -= speed;
     drawTriangle(obstacles[i]);
@@ -146,10 +133,8 @@ function update() {
     }
   }
 
-  // Spawn obstacles randomly
   if (Math.random() < 0.02) spawnObstacle();
 
-  // Update distance and progress
   distance += speed;
   const progress = Math.min(distance / 2000, 1);
   document.getElementById('progressBar').style.width = (progress * 100) + '%';
@@ -157,7 +142,6 @@ function update() {
   requestAnimationFrame(update);
 }
 
-// Start game
 update();
 </script>
 </body>
