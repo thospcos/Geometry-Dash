@@ -2,265 +2,218 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>geometry dash remake by thosphere ig</title>
+<title>Geometry Dash HTML</title>
 <style>
-  body {
-    margin: 0;
-    background: #06111d;
-    display: flex;
-    justify-content: center;
-    padding-top: 60px;
-    font-family: Arial, sans-serif;
-  }
-  .wrapper {
-    width: 960px;
-    text-align: center;
-  }
-  canvas {
-    width: 100%;
-    height: 450px;
-    background: #0a1a2c;
-    border-radius: 12px;
-  }
-  #overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    pointer-events: none;
-  }
-  .btn {
-    pointer-events: auto;
-    padding: 12px 20px;
-    font-size: 20px;
-    border-radius: 10px;
-    background: rgba(255,255,255,0.1);
-    border: 1px solid rgba(255,255,255,0.25);
-    color: white;
-    cursor: pointer;
-  }
+    body {
+        margin: 0;
+        background: #111;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        padding-top: 60px;
+        height: 100vh;
+        overflow: hidden;
+        font-family: Arial, sans-serif;
+        user-select: none;
+    }
+    #gameContainer {
+        position: relative;
+    }
+    canvas {
+        background: #222;
+        display: block;
+        border: 4px solid #444;
+        border-radius: 8px;
+    }
+    #progressBarBG {
+        width: 100%;
+        height: 10px;
+        background: #333;
+        position: absolute;
+        top: -20px;
+        left: 0;
+        border-radius: 5px;
+    }
+    #progressBarFill {
+        height: 10px;
+        width: 0%;
+        background: #0f0;
+        border-radius: 5px;
+    }
+    #nextLevelBtn, #restartBtn {
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        padding: 15px 25px;
+        background: #fff;
+        color: #000;
+        font-size: 20px;
+        border: none;
+        border-radius: 8px;
+        display: none;
+        cursor: pointer;
+    }
 </style>
 </head>
 <body>
-<div class="wrapper">
-  <canvas id="game" width="900" height="450"></canvas>
-  <div id="overlay"></div>
+<div id="gameContainer">
+    <div id="progressBarBG"><div id="progressBarFill"></div></div>
+    <canvas id="game" width="800" height="300"></canvas>
+    <button id="restartBtn">Restart</button>
+    <button id="nextLevelBtn">Play Next Level</button>
 </div>
 <script>
-// BASIC SETUP
+// CANVAS SETUP
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
-const overlay = document.getElementById("overlay");
+const restartBtn = document.getElementById("restartBtn");
+const nextLevelBtn = document.getElementById("nextLevelBtn");
+const progressFill = document.getElementById("progressBarFill");
 
-const W = 900, H = 450;
-canvas.width = W;
-canvas.height = H;
-
-// PLAYER
-const player = {
-  x: 120,
-  y: H - 90,
-  size: 40,
-  vy: 0,
-  gravity: 1.05,
-  jumpForce: -17,
-  grounded: true,
-  rotation: 0,
-  alive: true
-};
-
-// LEVEL SYSTEM
 let level = 1;
-let levelLength = 60 * 60 * 1.2; // 1.2 minutes
-let levelProgress = 0;
+let levelDuration = 120000; // 2 minutes
+let levelStartTime = 0;
+let speed = 6;
 
-// GAME
-let gameSpeed = 6.5;
-let obstacles = [];
-let inputHeld = false;
+let player, obstacles, spikes;
+let gameOver = false;
+let jumpHeld = false;
+let gravity = 0.6;
+let spinSpeed = 12;
 
-function jump(){
-  if (!player.alive) return;
-  if (player.grounded){
-    player.vy = player.jumpForce;
-    player.grounded = false;
-  }
+function resetGame(startNewLevel = false) {
+    if (startNewLevel) level++;
+
+    speed = 6 + (level - 1) * 0.5;
+
+    player = {
+        x: 80,
+        y: 220,
+        size: 30,
+        yv: 0,
+        grounded: false,
+        rotation: 0
+    };
+
+    obstacles = [];
+    spikes = [];
+    gameOver = false;
+    restartBtn.style.display = "none";
+    nextLevelBtn.style.display = "none";
+    progressFill.style.width = "0%";
+
+    levelStartTime = Date.now();
 }
+
+function spawnObstacle() {
+    const isWide = Math.random() < 0.7;
+    const width = isWide ? 120 + Math.random() * 80 : 40;
+    const height = 40;
+    const x = canvas.width + Math.random() * 400;
+
+    obstacles.push({ x, y: 260 - height, w: width, h: height });
+
+    if (Math.random() < 0.5) {
+        spikes.push({ x: x + width / 2 - 10, y: 260 - height - 20, w: 20, h: 20 });
+    }
+}
+
+setInterval(spawnObstacle, 900);
 
 window.addEventListener("keydown", e => {
-  if (e.code === "Space") jump();
+    if (e.code === "Space") jumpHeld = true;
 });
-canvas.addEventListener("mousedown", jump);
-canvas.addEventListener("touchstart", e => { e.preventDefault(); jump(); });
+window.addEventListener("keyup", e => {
+    if (e.code === "Space") jumpHeld = false;
+});
+canvas.addEventListener("mousedown", () => jumpHeld = true);
+canvas.addEventListener("mouseup", () => jumpHeld = false);
 
-// OBSTACLE GENERATION
-function spawnObstacle(){
-  const gap = 200 + Math.random()*200;
-  const x = W + gap;
+function update() {
+    if (gameOver) return;
 
-  // 50% spike, 50% block you can stand on
-  if(Math.random() < 0.5){
-    const w = 40;
-    const h = 40;
-    obstacles.push({type: "spike", x, y: H - 50, w, h});
-  } else {
-    const w = 60 + Math.random()*40;
-    const h = 40 + Math.random()*20;
-    obstacles.push({type: "block", x, y: H - 50 - h, w, h});
-  }
-}
+    let timePassed = Date.now() - levelStartTime;
+    let prog = Math.min(timePassed / levelDuration, 1);
+    progressFill.style.width = (prog * 100) + "%";
 
-let spawnTimer = 0;
+    if (prog >= 1) {
+        nextLevelBtn.style.display = "block";
+        gameOver = true;
+        return;
+    }
 
-function update(){
-  if (!player.alive) return;
+    player.yv += gravity;
 
-  spawnTimer++;
-  if (spawnTimer > 70){
-    spawnObstacle();
-    spawnTimer = 0;
-  }
+    if (jumpHeld && player.grounded) player.yv = -12;
 
-  // PLAYER PHYSICS
-  player.vy += player.gravity;
-  player.y += player.vy;
+    player.y += player.yv;
 
-  // FLOOR
-  if(player.y + player.size >= H - 50){
-    player.y = H - 50 - player.size;
-    player.vy = 0;
-    player.grounded = true;
-  }
+    player.grounded = false;
+    if (player.y + player.size >= 260) {
+        player.y = 260 - player.size;
+        player.yv = 0;
+        player.grounded = true;
+    }
 
-  // ROTATION - ALWAYS FORWARD (no reversing)
-  if (!player.grounded)
-    player.rotation += 0.25;
-  else
-    player.rotation = 0;
+    player.rotation += spinSpeed * 0.05;
 
-  // MOVE OBSTACLES
-  obstacles.forEach(ob => ob.x -= gameSpeed);
-  obstacles = obstacles.filter(ob => ob.x + ob.w > -20);
-
-  // COLLISION HANDLING
-  obstacles.forEach(ob => {
-    const px = player.x;
-    const py = player.y;
-    const ps = player.size;
-
-    if(ob.type === "spike"){
-      if(px < ob.x + ob.w && px + ps > ob.x && py < ob.y + ob.h && py + ps > ob.y){
-        die();
-      }
-    } else {
-      // BLOCKS — PLAYER CAN STAND ON THEM
-      if(px < ob.x + ob.w && px + ps > ob.x){
-        // from above
-        if(py + ps > ob.y && py + ps < ob.y + ob.h + 20 && player.vy > 0){
-          player.y = ob.y - ps;
-          player.vy = 0;
-          player.grounded = true;
+    for (let ob of obstacles) {
+        ob.x -= speed;
+        if (rectCollision(player, ob)) {
+            if (player.y + player.size - player.yv <= ob.y) {
+                player.y = ob.y - player.size;
+                player.yv = 0;
+                player.grounded = true;
+            } else death();
         }
-      }
     }
-  });
 
-  // LEVEL PROGRESSION
-  levelProgress++;
-  if(levelProgress >= levelLength){
-    winLevel();
-  }
-}
-
-function draw(){
-  ctx.clearRect(0,0,W,H);
-
-  // background
-  ctx.fillStyle = "#081a2e";
-  ctx.fillRect(0,0,W,H);
-
-  // ground
-  ctx.fillStyle = "#0d2239";
-  ctx.fillRect(0,H-50,W,50);
-
-  // obstacles
-  obstacles.forEach(ob => {
-    if(ob.type === "spike"){
-      ctx.fillStyle = "#ff4444";
-      ctx.beginPath();
-      ctx.moveTo(ob.x, ob.y + ob.h);
-      ctx.lineTo(ob.x + ob.w/2, ob.y);
-      ctx.lineTo(ob.x + ob.w, ob.y + ob.h);
-      ctx.fill();
-    } else {
-      ctx.fillStyle = "#456";
-      ctx.fillRect(ob.x, ob.y, ob.w, ob.h);
+    for (let sp of spikes) {
+        sp.x -= speed;
+        if (rectCollision(player, sp)) death();
     }
-  });
 
-  // player
-  ctx.save();
-  ctx.translate(player.x + player.size/2, player.y + player.size/2);
-  ctx.rotate(player.rotation);
-  ctx.fillStyle = "#0ff";
-  ctx.fillRect(-player.size/2, -player.size/2, player.size, player.size);
-  ctx.restore();
+    obstacles = obstacles.filter(o => o.x + o.w > 0);
+    spikes = spikes.filter(s => s.x + s.w > 0);
+
+    draw();
+    requestAnimationFrame(update);
 }
 
-function loop(){
-  update();
-  draw();
-  if(player.alive) requestAnimationFrame(loop);
+function rectCollision(a, b) {
+    return a.x < b.x + b.w && a.x + a.size > b.x && a.y < b.y + b.h && a.y + a.size > b.y;
 }
 
-function die(){
-  player.alive = false;
-  showMessage("You Died", "Restart", () => restart());
+function death() {
+    gameOver = true;
+    restartBtn.style.display = "block";
 }
 
-function winLevel(){
-  player.alive = false;
-  showMessage("Level Complete!", "Play Next Level", () => nextLevel());
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = "#444";
+    ctx.fillRect(0, 260, canvas.width, 40);
+
+    ctx.save();
+    ctx.translate(player.x + player.size / 2, player.y + player.size / 2);
+    ctx.rotate(player.rotation);
+    ctx.fillStyle = "#0ff";
+    ctx.fillRect(-player.size / 2, -player.size / 2, player.size, player.size);
+    ctx.restore();
+
+    ctx.fillStyle = "#888";
+    for (let ob of obstacles) ctx.fillRect(ob.x, ob.y, ob.w, ob.h);
+
+    ctx.fillStyle = "#f00";
+    for (let sp of spikes) ctx.fillRect(sp.x, sp.y, sp.w, sp.h);
 }
 
-function restart(){
-  obstacles = [];
-  player.y = H - 90;
-  player.vy = 0;
-  player.alive = true;
-  levelProgress = 0;
-  overlay.innerHTML = "";
-  loop();
-}
+restartBtn.onclick = () => resetGame(false);
+nextLevelBtn.onclick = () => resetGame(true);
 
-function nextLevel(){
-  level++;
-  obstacles = [];
-  player.y = H - 90;
-  player.vy = 0;
-  player.alive = true;
-  levelProgress = 0;
-  levelLength = 60 * 60 * 1.2; // each level same duration
-  gameSpeed += 0.5; // faster each level
-  overlay.innerHTML = "";
-  loop();
-}
-
-function showMessage(title, button, callback){
-  overlay.innerHTML = `
-    <div style="pointer-events:auto; text-align:center;">
-      <div style="font-size:28px; margin-bottom:15px; color:white;">${title}</div>
-      <button class="btn">${button}</button>
-    </div>`;
-  overlay.querySelector("button").onclick = callback;
-}
-
-restart();
+resetGame();
+update();
 </script>
 </body>
 </html>
