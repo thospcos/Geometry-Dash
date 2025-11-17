@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Geometry Dash — Mini HTML Game</title>
+  <style>
+    :root{--bg:#0f1724;--panel:#0b1220;--accent:#14b8a6;--danger:#ef4444;--muted:#94a3b8}
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial}
+    body{display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,var(--bg),#071029);color:#e6eef6}
+    .wrap{width:980px;max-width:96vw;padding:18px;border-radius:12px;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));box-shadow:0 6px 30px rgba(2,6,23,0.8)}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+    h1{font-size:18px;margin:0}
+    .controls{display:flex;gap:8px;align-items:center}
+    button{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px 10px;border-radius:8px;color:inherit;cursor:pointer}
+    button:hover{border-color:rgba(255,255,255,0.12)}
+    .meta{font-size:13px;color:var(--muted)}
+    #gameCanvas{display:block;width:100%;height:380px;background:linear-gradient(180deg,#071026 0%, #082233 100%);border-radius:8px}
+    .footer{display:flex;justify-content:space-between;margin-top:10px;gap:10px}
+    .panel{padding:8px 10px;border-radius:8px;background:rgba(255,255,255,0.02);font-size:13px}
+    .big{font-weight:700;font-size:16px}
+    .hint{color:var(--muted);font-size:13px}
+    .credits{font-size:12px;color:var(--muted)}
+    @media (max-width:520px){#gameCanvas{height:260px}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Geometry Dash — Mini HTML Game</h1>
+        <div class="meta">Controls: <strong>Space</strong> / <strong>Click</strong> / Tap — Hold for longer jump</div>
+      </div>
+      <div class="controls">
+        <button id="restartBtn">Restart</button>
+        <button id="muteBtn">Mute</button>
+      </div>
+    </header>
+
+    <canvas id="gameCanvas" width="960" height="380"></canvas>
+
+    <div class="footer">
+      <div class="panel">
+        <div>Score: <span id="score" class="big">0</span></div>
+        <div class="hint">Best: <span id="best">0</span> • Speed will increase over time</div>
+      </div>
+      <div class="panel credits">Made with ❤️ — single-file HTML/CSS/JS. Resize your browser for different viewports.</div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width = 960;
+  const H = canvas.height = 380;
+
+  // UI
+  const scoreEl = document.getElementById('score');
+  const bestEl = document.getElementById('best');
+  const restartBtn = document.getElementById('restartBtn');
+  const muteBtn = document.getElementById('muteBtn');
+
+  // Game state
+  let running = true;
+  let paused = false;
+  let score = 0;
+  let best = Number(localStorage.getItem('gd_best') || 0);
+  bestEl.textContent = best;
+  let speed = 3.2; // obstacle speed
+  let speedIncreaseTimer = 0;
+  let spawnTimer = 0;
+  let spawnInterval = 90; // frames
+  let obstacles = [];
+  let particles = [];
+  let t = 0;
+  let mute = false;
+
+  // Player
+  const player = {
+    x: 120,
+    y: H - 58,
+    w: 38,
+    h: 38,
+    vy: 0,
+    gravity: 0.9,
+    jumpForce: -15,
+    grounded: true,
+    color: '#14b8a6',
+    jumpHold: false,
+  };
+
+  // Input
+  const keys = {};
+  function startJump(){
+    if (!running) return;
+    if (player.grounded){
+      player.vy = player.jumpForce;
+      player.grounded = false;
+      playBeep(440,0.06);
+    }
+    player.jumpHold = true;
+  }
+  function endJump(){ player.jumpHold = false }
+
+  window.addEventListener('keydown', e => { if(e.code === 'Space') { e.preventDefault(); startJump(); } keys[e.code] = true });
+  window.addEventListener('keyup', e => { if(e.code === 'Space') { endJump(); } keys[e.code] = false });
+  canvas.addEventListener('mousedown', e => startJump());
+  window.addEventListener('mouseup', e => endJump());
+  canvas.addEventListener('touchstart', e => { e.preventDefault(); startJump(); }, {passive:false});
+  canvas.addEventListener('touchend', e => { e.preventDefault(); endJump(); }, {passive:false});
+
+  restartBtn.addEventListener('click', restart);
+  muteBtn.addEventListener('click', () => { mute = !mute; muteBtn.textContent = mute ? 'Unmute' : 'Mute'; });
+
+  function restart(){
+    running = true;
+    paused = false;
+    score = 0; speed = 3.2; speedIncreaseTimer = 0; spawnTimer = 0; spawnInterval = 90; obstacles = []; particles = [];
+    player.y = H - 58; player.vy = 0; player.grounded = true; player.jumpHold = false;
+    if(!mute) playBeep(880,0.08);
+  }
+
+  // Obstacle factory
+  function spawnObstacle(){
+    // Random height/type
+    const types = ['block','spike','tall'];
+    const type = Math.random() < 0.18 ? 'tall' : (Math.random()<0.25 ? 'spike' : 'block');
+    if(type === 'block'){
+      const size = 30 + Math.round(Math.random()*40);
+      obstacles.push({x: W + 20, y: H - 40 - (size - 30), w: size, h: size, type:'block'});
+    } else if(type === 'spike'){
+      const w = 28; const h = 28;
+      obstacles.push({x: W + 20, y: H - 40 - (h - 18), w, h, type:'spike'});
+    } else {
+      const w = 28; const h = 80 + Math.round(Math.random()*40);
+      obstacles.push({x: W + 20, y: H - 40 - (h - 30), w, h, type:'tall'});
+    }
+  }
+
+  // Simple collision AABB
+  function collide(a,b){
+    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  }
+
+  // Particles for effects
+  function spawnParticles(x,y,color,amount=10){
+    for(let i=0;i<amount;i++){
+      particles.push({x,y,vx:(Math.random()-0.5)*6, vy:(Math.random()-1.5)*6, life:30+Math.random()*40, c:color});
+    }
+  }
+
+  // Audio: tiny beep using WebAudio
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  const actx = AudioCtx ? new AudioCtx() : null;
+  function playBeep(freq=440,dur=0.05){ if(mute || !actx) return; const o = actx.createOscillator(); const g = actx.createGain(); o.type='sawtooth'; o.frequency.value = freq; g.gain.setValueAtTime(0.0001, actx.currentTime); g.gain.linearRampToValueAtTime(0.12, actx.currentTime+0.01); g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime+dur); o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime+dur+0.02); }
+
+  // Draw rounded rect
+  function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+  // Main loop
+  function update(){
+    if(!running) return;
+    t++;
+
+    // Difficulty scaling
+    speedIncreaseTimer += 1/60;
+    if(speedIncreaseTimer > 3){ speed += 0.02; speedIncreaseTimer = 0; }
+
+    // Spawn obstacles
+    spawnTimer++;
+    if(spawnTimer > spawnInterval){ spawnObstacle(); spawnTimer = 0; spawnInterval = 60 + Math.floor(Math.random()*90) - Math.floor(speed*4); if(spawnInterval<48) spawnInterval = 48; }
+
+    // Player physics
+    if(!player.grounded){
+      player.vy += player.gravity * (player.jumpHold ? 0.75 : 1.0);
+      player.y += player.vy;
+      if(player.y + player.h >= H - 20){ player.y = H - 20 - player.h; player.vy = 0; player.grounded = true; }
+    }
+
+    // Move obstacles
+    for(let i=obstacles.length-1;i>=0;i--){
+      const ob = obstacles[i];
+      ob.x -= speed;
+      if(ob.x + ob.w < -40) { obstacles.splice(i,1); score++; scoreEl.textContent = score; if(score>best){ best = score; bestEl.textContent = best; localStorage.setItem('gd_best',best); } }
+      // collision
+      if(collide(player, ob)){
+        // If obstacle is spike allow slight top overlap detection by polygon? We'll keep simple: hit = death
+        die();
+      }
+    }
+
+    // Particles
+    for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.x+=p.vx; p.y+=p.vy; p.vy += 0.3; p.life-=1; if(p.life<=0) particles.splice(i,1); }
+
+    // Ground parallax (handled in draw)
+  }
+
+  function die(){
+    if(!running) return;
+    running = false;
+    playBeep(120,0.5);
+    spawnParticles(player.x + player.w/2, player.y + player.h/2, '#ef4444', 24);
+    setTimeout(()=>{ /* allow explosion */ }, 200);
+  }
+
+  function draw(){
+    // Clear
+    ctx.clearRect(0,0,W,H);
+
+    // Background grid / gradient
+    const g = ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,'#071022'); g.addColorStop(1,'#07263a');
+    ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+
+    // Moving ground
+    ctx.fillStyle = '#071c2a'; ctx.fillRect(0,H-20,W,20);
+    // Decorative stripes
+    for(let i=0;i<Math.ceil(W/40);i++){
+      const off = ((t*speed*0.5) % 40);
+      ctx.fillStyle = 'rgba(255,255,255,0.02)'; ctx.fillRect(i*40 - off, H-18, 20, 6);
+    }
+
+    // Draw obstacles
+    obstacles.forEach(ob => {
+      if(ob.type === 'block' || ob.type==='tall'){
+        roundRect(ob.x, ob.y, ob.w, ob.h, 6);
+        ctx.fillStyle = '#334155'; ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.stroke();
+        // inner highlight
+        ctx.fillStyle = 'rgba(255,255,255,0.03)'; ctx.fillRect(ob.x+4, ob.y+4, Math.max(0, ob.w-8), Math.max(0, ob.h-8));
+      } else if(ob.type==='spike'){
+        // triangle spike
+        ctx.beginPath(); ctx.moveTo(ob.x, ob.y+ob.h); ctx.lineTo(ob.x + ob.w/2, ob.y); ctx.lineTo(ob.x + ob.w, ob.y+ob.h); ctx.closePath(); ctx.fillStyle = '#ef4444'; ctx.fill();
+      }
+    });
+
+    // Draw player (simple square with shadow)
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 8;
+    roundRect(player.x, player.y, player.w, player.h, 6);
+    ctx.fillStyle = player.color; ctx.fill();
+    ctx.restore();
+
+    // Particles
+    particles.forEach(p => {
+      ctx.globalAlpha = Math.max(0, Math.min(1, p.life/60));
+      ctx.fillStyle = p.c; ctx.fillRect(p.x, p.y, 3,3);
+      ctx.globalAlpha = 1;
+    });
+
+    // HUD overlay
+    ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.fillRect(8,8,160,44);
+    ctx.fillStyle = '#e6eef6'; ctx.font = '18px system-ui,Arial'; ctx.fillText('Score: ' + score, 16, 32);
+    if(!running){ ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(W/2-160,H/2-60,320,120); ctx.fillStyle='#fff'; ctx.font='22px system-ui,Arial'; ctx.fillText('You Died', W/2-50, H/2-10); ctx.font='14px system-ui,Arial'; ctx.fillText('Click Restart to try again', W/2-84, H/2+18); }
+  }
+
+  // Game loop
+  function loop(){ update(); draw(); if(running) requestAnimationFrame(loop); }
+  loop();
+
+  // Slight initial obstacle seeding
+  for(let i=0;i<2;i++){ setTimeout(spawnObstacle, 400 + i*500); }
+
+  // Allow holding jump for higher jump
+  // (already factored into gravity multiplier)
+
+  // Make the canvas scale to fit width while keeping resolution
+  function resizeCanvas(){ const rect = canvas.getBoundingClientRect(); canvas.width = Math.max(640, Math.floor(rect.width)); /* keep height proportional */ canvas.height = Math.floor(rect.width * 0.395); }
+  // We keep internal logic based on original W/H; to avoid complexity, we will keep canvas pixel size fixed but allow CSS scale: done with width/height in CSS. (If you want crisp scaling we can adapt)
+
+})();
+</script>
+</body>
+</html>
