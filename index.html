@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Geometry Dash Remake by Thosphere IG</title>
+<title>algebra dash (thosphere's geometry dash remake)</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -18,11 +18,14 @@
   }
   #progressContainer {
     position: absolute;
-    top: 10px;
-    left: 10px;
-    width: 80%;
-    height: 10px;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 70%;
+    height: 12px;
     background: #555;
+    border-radius: 6px;
+    overflow: hidden;
   }
   #progressBar {
     height: 100%;
@@ -43,7 +46,7 @@ const ctx = canvas.getContext('2d');
 
 const GRAVITY = 0.7;
 const JUMP = -12;
-let speed = 4;
+let speed = 5.3;
 let distance = 0;
 let gameOver = false;
 
@@ -56,16 +59,20 @@ const player = {
 };
 
 let obstacles = [];
+let lastObstacleX = 0;
+
 function spawnObstacle() {
   const spikeHeight = 40;
   const spikeWidth = 40;
-  const gap = Math.random() * 200 + 100;
+  let gap = Math.random() * 200 + 300;
+  const x = Math.max(canvas.width + gap, lastObstacleX + 300);
   obstacles.push({
-    x: canvas.width + gap,
+    x: x,
     y: canvas.height - spikeHeight,
     width: spikeWidth,
     height: spikeHeight
   });
+  lastObstacleX = x;
 }
 
 document.addEventListener('keydown', (e) => {
@@ -86,63 +93,4 @@ function drawTriangle(tri) {
   ctx.fillStyle = '#f00';
   ctx.beginPath();
   ctx.moveTo(tri.x, tri.y + tri.height);
-  ctx.lineTo(tri.x + tri.width/2, tri.y);
-  ctx.lineTo(tri.x + tri.width, tri.y + tri.height);
-  ctx.closePath();
-  ctx.fill();
-}
-
-function update() {
-  if (gameOver) return;
-
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  player.dy += GRAVITY;
-  player.y += player.dy;
-
-  if (player.y + player.size > canvas.height) {
-    player.y = canvas.height - player.size;
-    player.dy = 0;
-  }
-
-  if (player.dy !== 0) {
-    player.rotation += 0.2;
-  } else {
-    player.rotation = 0;
-  }
-
-  ctx.save();
-  ctx.translate(player.x + player.size/2, player.y + player.size/2);
-  ctx.rotate(player.rotation);
-  ctx.fillStyle = '#0ff';
-  ctx.fillRect(-player.size/2, -player.size/2, player.size, player.size);
-  ctx.restore();
-
-  for (let i = obstacles.length - 1; i >= 0; i--) {
-    obstacles[i].x -= speed;
-    drawTriangle(obstacles[i]);
-
-    if (checkCollision(player, obstacles[i])) {
-      gameOver = true;
-      alert("Game Over!");
-      location.reload();
-    }
-
-    if (obstacles[i].x + obstacles[i].width < 0) {
-      obstacles.splice(i,1);
-    }
-  }
-
-  if (Math.random() < 0.02) spawnObstacle();
-
-  distance += speed;
-  const progress = Math.min(distance / 2000, 1);
-  document.getElementById('progressBar').style.width = (progress * 100) + '%';
-
-  requestAnimationFrame(update);
-}
-
-update();
-</script>
-</body>
-</html>
+  ctx.lineTo(tr
