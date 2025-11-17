@@ -34,7 +34,7 @@
 </head>
 <body>
 
-<button id="restartBtn">Restart</button>
+
 <canvas id="game" width="900" height="400"></canvas>
 
 <script>
@@ -43,7 +43,7 @@
 // =============================
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
-const restartBtn = document.getElementById("restartBtn");
+const restartBtn = null;
 
 let player = {
   x: 80,
@@ -59,6 +59,7 @@ let groundY = 350;
 let obstacles = [];
 let gameSpeed = 6;
 let gameRunning = true;
+let progress = 0;
 let spaceHeld = false;
 
 // =============================
@@ -74,7 +75,7 @@ window.addEventListener("keyup", (e) => {
   if (e.code === "Space") spaceHeld = false;
 });
 
-restartBtn.onclick = () => resetGame();
+
 
 // =============================
 // SPAWN PROCEDURAL OBSTACLES
@@ -85,7 +86,7 @@ function spawnObstacle() {
     x: canvas.width + 50,
     y: groundY - height,
     w: 30,
-    h: height,
+    h: height * 0.5,
   });
 }
 setInterval(() => {
@@ -129,6 +130,14 @@ function resetGame() {
 function loop() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+  // progress bar
+  ctx.fillStyle = '#00ff99';
+  ctx.fillRect(0, 0, (progress % canvas.width), 4);
+  progress += gameRunning ? 2 : 0;
+
+  if (gameRunning) {
+(0, 0, canvas.width, canvas.height);
+
   if (gameRunning) {
     // Gravity
     player.vy += player.gravity;
@@ -149,6 +158,7 @@ function loop() {
 
       if (isColliding({ x: player.x, y: player.y, size: player.size }, ob)) {
         gameRunning = false;
+        showRestart();
       }
     });
 
@@ -178,6 +188,18 @@ function loop() {
 }
 
 loop();
+function showRestart() {
+  const b = document.createElement('button');
+  b.id = 'restartBtn';
+  b.innerText = 'Restart';
+  b.style.position = 'absolute';
+  b.style.top = '20px';
+  b.style.left = '20px';
+  b.style.padding = '10px 20px';
+  b.onclick = () => location.reload();
+  document.body.appendChild(b);
+}
+
 </script>
 
 </body>
