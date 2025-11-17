@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>algebra dash (thosphere's geometry dash remake)</title>
+<title>Algebra Dash</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
@@ -14,6 +14,18 @@
     font-family: sans-serif;
     color: #fff;
     overflow: hidden;
+    flex-direction: column;
+  }
+  #title {
+    font-size: 24px;
+    margin-bottom: 10px;
+    color: #0ff;
+    font-weight: bold;
+  }
+  #timer {
+    font-size: 16px;
+    margin-bottom: 5px;
+    color: #0f0;
   }
   #gameContainer {
     position: relative;
@@ -53,6 +65,8 @@
 </style>
 </head>
 <body>
+<div id="title">Algebra Dash (Thosphere's GD Remake)</div>
+<div id="timer">Time: 0.0 s</div>
 <div id="gameContainer">
   <canvas id="gameCanvas" width="800" height="400"></canvas>
   <div id="progressContainer"><div id="progressBar"></div></div>
@@ -62,12 +76,14 @@
 <script>
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+const timerDisplay = document.getElementById('timer');
 
 const GRAVITY = 0.8;
 const JUMP = -14;
 let speed = 7;
 let distance = 0;
 let gameOver = false;
+let startTime = Date.now();
 
 const player = { x:100, y:canvas.height-50, size:50, dy:0, rotation:0 };
 let obstacles = [];
@@ -88,40 +104,24 @@ document.addEventListener('keydown', e => {
 
 // Improved triangle collision
 function checkCollision(rect, tri) {
-  // Player corners
-  const px = rect.x;
-  const py = rect.y;
-  const ps = rect.size;
+  const px = rect.x, py = rect.y, ps = rect.size;
+  const ax = tri.x + tri.width/2, ay = tri.y;
+  const bx = tri.x, by = tri.y + tri.height;
+  const cx = tri.x + tri.width, cy = tri.y + tri.height;
 
-  // Triangle vertices
-  const ax = tri.x + tri.width/2;
-  const ay = tri.y;
-  const bx = tri.x;
-  const by = tri.y + tri.height;
-  const cx = tri.x + tri.width;
-  const cy = tri.y + tri.height;
-
-  // Check if any of the bottom corners are inside the triangle using barycentric technique
-  const corners = [
-    {x:px, y:py+ps},
-    {x:px+ps, y:py+ps}
-  ];
-
+  const corners = [ {x:px, y:py+ps}, {x:px+ps, y:py+ps} ];
   for(let corner of corners){
     const v0x = cx - ax, v0y = cy - ay;
     const v1x = bx - ax, v1y = by - ay;
     const v2x = corner.x - ax, v2y = corner.y - ay;
-
     const dot00 = v0x*v0x + v0y*v0y;
     const dot01 = v0x*v1x + v0y*v1y;
     const dot02 = v0x*v2x + v0y*v2y;
     const dot11 = v1x*v1x + v1y*v1y;
     const dot12 = v1x*v2x + v1y*v2y;
-
     const invDenom = 1 / (dot00*dot11 - dot01*dot01);
     const u = (dot11*dot02 - dot01*dot12) * invDenom;
     const v = (dot00*dot12 - dot01*dot02) * invDenom;
-
     if(u>=0 && v>=0 && u+v<=1) return true;
   }
   return false;
@@ -150,6 +150,7 @@ document.getElementById('restartBtn').addEventListener('click',()=>{
   player.rotation=0;
   lastObstacleX=0;
   gameOver=false;
+  startTime = Date.now();
   document.getElementById('restartBtn').style.display='none';
   update();
 });
@@ -189,6 +190,10 @@ function update(){
   distance += speed;
   const slowProgress = Math.min(distance/10000,1);
   document.getElementById('progressBar').style.width = (slowProgress*100)+'%';
+
+  // Update timer
+  const elapsed = ((Date.now() - startTime)/1000).toFixed(1);
+  timerDisplay.textContent = "Time: " + elapsed + " s";
 
   requestAnimationFrame(update);
 }
