@@ -21,10 +21,7 @@
     flex-direction: column;
     align-items: center;
   }
-  canvas {
-    background: #111;
-    display: block;
-  }
+  canvas { background: #111; display: block; }
   #progressContainer {
     margin-top: 10px;
     width: 70%;
@@ -58,9 +55,7 @@
 <body>
 <div id="gameContainer">
   <canvas id="gameCanvas" width="800" height="400"></canvas>
-  <div id="progressContainer">
-    <div id="progressBar"></div>
-  </div>
+  <div id="progressContainer"><div id="progressBar"></div></div>
   <button id="restartBtn">Restart</button>
 </div>
 
@@ -74,14 +69,7 @@ let speed = 7;
 let distance = 0;
 let gameOver = false;
 
-const player = {
-  x: 100,
-  y: canvas.height - 50,
-  size: 50,
-  dy: 0,
-  rotation: 0
-};
-
+const player = { x:100, y:canvas.height-50, size:50, dy:0, rotation:0 };
 let obstacles = [];
 let lastObstacleX = 0;
 
@@ -90,25 +78,56 @@ function spawnObstacle() {
   const spikeWidth = 40;
   let gap = Math.random() * 200 + 200;
   const x = Math.max(canvas.width + gap, lastObstacleX + 200);
-  obstacles.push({ x: x, y: canvas.height - spikeHeight, width: spikeWidth, height: spikeHeight });
+  obstacles.push({ x:x, y:canvas.height - spikeHeight, width:spikeWidth, height:spikeHeight });
   lastObstacleX = x;
 }
 
-document.addEventListener('keydown', (e) => {
-  if (e.code === 'Space' && player.y + player.size >= canvas.height) {
-    player.dy = JUMP;
-  }
+document.addEventListener('keydown', e => {
+  if(e.code==='Space' && player.y+player.size >= canvas.height) player.dy = JUMP;
 });
 
+// Improved triangle collision
 function checkCollision(rect, tri) {
-  const triBox = {x: tri.x, y: tri.y, width: tri.width, height: tri.height};
-  return rect.x < triBox.x + triBox.width &&
-         rect.x + rect.size > triBox.x &&
-         rect.y < triBox.y + triBox.height &&
-         rect.y + rect.size > triBox.y;
+  // Player corners
+  const px = rect.x;
+  const py = rect.y;
+  const ps = rect.size;
+
+  // Triangle vertices
+  const ax = tri.x + tri.width/2;
+  const ay = tri.y;
+  const bx = tri.x;
+  const by = tri.y + tri.height;
+  const cx = tri.x + tri.width;
+  const cy = tri.y + tri.height;
+
+  // Check if any of the bottom corners are inside the triangle using barycentric technique
+  const corners = [
+    {x:px, y:py+ps},
+    {x:px+ps, y:py+ps}
+  ];
+
+  for(let corner of corners){
+    const v0x = cx - ax, v0y = cy - ay;
+    const v1x = bx - ax, v1y = by - ay;
+    const v2x = corner.x - ax, v2y = corner.y - ay;
+
+    const dot00 = v0x*v0x + v0y*v0y;
+    const dot01 = v0x*v1x + v0y*v1y;
+    const dot02 = v0x*v2x + v0y*v2y;
+    const dot11 = v1x*v1x + v1y*v1y;
+    const dot12 = v1x*v2x + v1y*v2y;
+
+    const invDenom = 1 / (dot00*dot11 - dot01*dot01);
+    const u = (dot11*dot02 - dot01*dot12) * invDenom;
+    const v = (dot00*dot12 - dot01*dot02) * invDenom;
+
+    if(u>=0 && v>=0 && u+v<=1) return true;
+  }
+  return false;
 }
 
-function drawTriangle(tri) {
+function drawTriangle(tri){
   ctx.fillStyle = '#f00';
   ctx.beginPath();
   ctx.moveTo(tri.x, tri.y + tri.height);
@@ -118,65 +137,58 @@ function drawTriangle(tri) {
   ctx.fill();
 }
 
-function endGame() {
-  gameOver = true;
-  document.getElementById('restartBtn').style.display = 'block';
+function endGame(){
+  gameOver=true;
+  document.getElementById('restartBtn').style.display='block';
 }
 
-document.getElementById('restartBtn').addEventListener('click', () => {
-  obstacles = [];
-  distance = 0;
-  player.y = canvas.height - player.size;
-  player.dy = 0;
-  player.rotation = 0;
-  lastObstacleX = 0;
-  gameOver = false;
-  document.getElementById('restartBtn').style.display = 'none';
+document.getElementById('restartBtn').addEventListener('click',()=>{
+  obstacles=[];
+  distance=0;
+  player.y=canvas.height-player.size;
+  player.dy=0;
+  player.rotation=0;
+  lastObstacleX=0;
+  gameOver=false;
+  document.getElementById('restartBtn').style.display='none';
   update();
 });
 
-function update() {
-  if (gameOver) return;
+function update(){
+  if(gameOver) return;
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
   player.dy += GRAVITY;
   player.y += player.dy;
 
-  if (player.y + player.size > canvas.height) {
+  if(player.y + player.size > canvas.height){
     player.y = canvas.height - player.size;
     player.dy = 0;
   }
 
-  if (player.dy !== 0) {
-    player.rotation += 0.2;
-  } else {
-    player.rotation = 0;
-  }
+  player.rotation = player.dy!==0 ? player.rotation+0.2 : 0;
 
   ctx.save();
-  ctx.translate(player.x + player.size/2, player.y + player.size/2);
+  ctx.translate(player.x+player.size/2, player.y+player.size/2);
   ctx.rotate(player.rotation);
-  ctx.fillStyle = '#0ff';
+  ctx.fillStyle='#0ff';
   ctx.fillRect(-player.size/2, -player.size/2, player.size, player.size);
   ctx.restore();
 
-  for (let i = obstacles.length - 1; i >= 0; i--) {
+  for(let i=obstacles.length-1;i>=0;i--){
     obstacles[i].x -= speed;
     drawTriangle(obstacles[i]);
-
-    if (checkCollision(player, obstacles[i])) endGame();
-
-    if (obstacles[i].x + obstacles[i].width < 0) obstacles.splice(i,1);
+    if(checkCollision(player,obstacles[i])) endGame();
+    if(obstacles[i].x + obstacles[i].width <0) obstacles.splice(i,1);
   }
 
-  if (obstacles.length === 0 || canvas.width - obstacles[obstacles.length-1].x > 200) {
-    if (Math.random() < 0.02) spawnObstacle();
-  }
+  if(obstacles.length===0 || canvas.width - obstacles[obstacles.length-1].x > 200)
+    if(Math.random()<0.02) spawnObstacle();
 
   distance += speed;
-  const slowProgress = Math.min(distance / 10000, 1);
-  document.getElementById('progressBar').style.width = (slowProgress * 100) + '%';
+  const slowProgress = Math.min(distance/10000,1);
+  document.getElementById('progressBar').style.width = (slowProgress*100)+'%';
 
   requestAnimationFrame(update);
 }
